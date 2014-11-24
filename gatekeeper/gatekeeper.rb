@@ -77,7 +77,7 @@ end
 begin
   develop_branch = client.branch(options[:repo], options[:develop_branch])
 rescue Octokit::NotFound
-  raise ArgumentError.new, "branch '#{options[:develop_branch]}' does not exist" unless develop_branch
+  raise ArgumentError.new, "branch '#{options[:develop_branch]}' does not exist"
 end
 
 begin
