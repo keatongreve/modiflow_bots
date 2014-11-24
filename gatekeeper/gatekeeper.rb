@@ -1,7 +1,7 @@
 require 'optparse'
 require 'octokit'
 
-options = { 
+options = {
   login: nil,
   password: nil,
   repo: nil,
@@ -34,7 +34,7 @@ parser = OptionParser.new do |opts|
   opts.on('-d', '--develop develop', 'Develop branch') do |develop_branch|
     options[:develop_branch] = develop_branch;
   end
-  
+
   opts.on('--release release', 'Release candidate branch name (created if doesn\'t exist)') do |release_branch|
     options[:release_branch] = release_branch;
   end
@@ -66,24 +66,29 @@ end
 client = Octokit::Client.new(login: options[:login], password: options[:password])
 
 user = client.user
-repo = client.repository(options[:repo]) 
-branches = client.branches(options[:repo])
+repo = client.repository(options[:repo])
 
-master_branch = branches.find { |b| b.name == options[:master_branch] }
-raise ArgumentError.new, "branch '#{options[:master_branch]}' does not exist" unless master_branch
-
-develop_branch = branches.find { |b| b.name == options[:develop_branch] }
-raise ArgumentError.new, "branch '#{options[:develop_branch]}' does not exist" unless develop_branch
-
-release_branch = branches.find { |b| b.name == options[:release_branch] }
-
-if options[:verbose]
-  puts "master: #{master_branch.inspect}" 
-  puts "develop: #{develop_branch.inspect}"
-  puts "release: #{release_branch.inspect}"
+begin
+  master_branch = client.branch(options[:repo], options[:master_branch])
+rescue Octokit::NotFound
+  raise ArgumentError.new, "branch '#{options[:master_branch]}' does not exist"
 end
 
-if release_branch.nil?
+begin
+  develop_branch = client.branch(options[:repo], options[:develop_branch])
+rescue Octokit::NotFound
+  raise ArgumentError.new, "branch '#{options[:develop_branch]}' does not exist" unless develop_branch
+end
+
+begin
+  release_branch = client.branch(options[:repo], options[:release_branch])
+
+  puts "release branch #{options[:release_branch]} exists, commit SHA is #{release_branch.commit.sha}"
+  if release_branch.commit.sha != develop_branch.commit.sha
+    puts "WARNING: does not match #{options[:develop_branch]} commit SHA #{develop_branch.commit.sha}"
+    puts "If this is intended, you can disregard this warning."
+  end
+rescue Octokit::NotFound
   puts "Creating ref heads/#{options[:release_branch]} with SHA = #{develop_branch.commit.sha} from #{options[:develop_branch]}"
   begin
     client.create_ref(options[:repo], "heads/#{options[:release_branch]}", develop_branch.commit.sha)
@@ -92,12 +97,12 @@ if release_branch.nil?
     puts "Failed to create new ref"
     exit 1
   end
-else
-  puts "release branch #{options[:release_branch]} exists, commit SHA is #{release_branch.commit.sha}"
-  if release_branch.commit.sha != develop_branch.commit.sha
-    puts "WARNING: does not match #{options[:develop_branch]} commit SHA #{develop_branch.commit.sha}"
-    puts "If this is intended, you can disregard this warning."
-  end
+end
+
+if options[:verbose]
+  puts "master: #{master_branch.inspect}"
+  puts "develop: #{develop_branch.inspect}"
+  puts "release: #{release_branch.inspect}"
 end
 
 pull_requests = client.pull_requests(options[:repo], state: 'open')
@@ -107,10 +112,10 @@ if pull_requests.any? { |pr| pr[:head][:ref] == options[:release_branch] && pr[:
 else
   puts "Creating pull request from #{options[:release_branch]} to #{options[:master_branch]}"
   begin
-    client.create_pull_request(options[:repo], 
-      options[:master_branch], 
-      options[:release_branch], 
-      options[:title], 
+    client.create_pull_request(options[:repo],
+      options[:master_branch],
+      options[:release_branch],
+      options[:title],
       options[:body])
     puts "Pull request created"
   rescue Octokit::UnprocessableEntity => e
