@@ -1,0 +1,5 @@
+config:
+  github_uri: https://api.github.com
+  owner: joshrlesch
+  repo: PRBot
+  expire_range: 60
