@@ -78,7 +78,7 @@ def get_stale_pulls
 	pulls = @client.get_pulls(@owner, @repo)
 	old_pr_numbers = []
 	pulls.each do |pull|
-		if pr_age(today_time, DateTime.iso8601(pull['created_at'])) >= @expire_range
+		if pr_age(today_time, DateTime.iso8601(pull['updated_at'])) >= @expire_range
 			old_pr_numbers.push(pull['number'])
 		end
 	end
