@@ -4,8 +4,11 @@ require 'yaml'
 
 config = YAML.load_file('config.yml')
 @owner = config['config']['owner']
+@bot_name = config['config']['bot_name']
 @repo = config['config']['repo']
 @expire_range = config['config']['expire_range']
+@retry_range = config['config']['retry_range']
+
 
 class PRClient
 	include HTTParty
@@ -30,6 +33,10 @@ class PRClient
 
 	def get_single_pull(owner, repo, number)
 		response = self.class.get "/repos/#{owner}/#{repo}/pulls/#{number}"
+	end
+
+	def get_comments(owner, repo, number)
+		reponse = self.class.get "/repos/#{owner}/#{repo}/issues/#{number}/comments"
 	end
 
 	def post_comment(owner, repo, number, comment)
@@ -65,20 +72,19 @@ if options.values.all?(&:nil?)
 end
 
 @client = PRClient.new(options[:token], @owner)
+@today_time = DateTime.now
 
 #calc the days
-def pr_age(today, created)
+def age(today, created)
 	today.mjd - created.mjd
 end
 
 #get all PR's that are older than the config expired range setting
 def get_stale_pulls
-	today_time = DateTime.now
-
 	pulls = @client.get_pulls(@owner, @repo)
 	old_pr_numbers = []
 	pulls.each do |pull|
-		if pr_age(today_time, DateTime.iso8601(pull['updated_at'])) >= @expire_range
+		if age(@today_time, DateTime.iso8601(pull['updated_at'])) >= @expire_range
 			old_pr_numbers.push(pull['number'])
 		end
 	end
@@ -87,25 +93,38 @@ end
 
 #get the create and update dates to calc days old and last updated days. Use these to generate comment details
 def generate_comment(number)
-	today_time = DateTime.now
-
 	single_pull = @client.get_single_pull(@owner, @repo, number)
 	created_at = single_pull['created_at']
 	updated_at = single_pull['updated_at']
 
-	days_old = pr_age(today_time, DateTime.iso8601(created_at))
+	days_old = age(@today_time, DateTime.iso8601(created_at))
 
-	updated_since = pr_age(today_time, DateTime.iso8601(updated_at))
+	updated_since = age(@today_time, DateTime.iso8601(updated_at))
 
 	return "Your PR was opened #{days_old} days ago and has not been updated in #{updated_since} days. Please merge or close this PR."
 end
 
-#post to each stale branch with comment that reminds the owner on how long it has be open, the last time it was updated and to do something with PR.
+#get the last comment on a PR and check to see if its from the bot, if so return if its in the retry window
+def check_last_bot_comment(number)
+	list_comments = @client.get_comments(@owner, @repo, number)
+	last_comment = list_comments.last['user']['login']
+	last_comment_date = list_comments.last['created_at']
+
+	if last_comment == @bot_name
+		age(@today_time, DateTime.iso8601(last_comment_date)) >= @retry_range ? true : false
+	else
+		return false
+	end
+end
+
+# post to each stale branch with comment that reminds the owner on how long it has be open, the last time it was updated and to do something with PR.
 prs = get_stale_pulls
 
 prs.each do |number|
-	comment_body = generate_comment(number)
-	@client.post_comment(@owner, @repo, number, comment_body)
+	if check_last_bot_comment(number)
+		comment_body = generate_comment(number)
+		@client.post_comment(@owner, @repo, number, comment_body)
+	end
 end
 
 

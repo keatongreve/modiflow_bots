@@ -1,5 +1,7 @@
 config:
   github_uri: https://api.github.com
-  owner: joshrlesch
-  repo: PRBot
-  expire_range: 60
+  owner: #hudl, owner of repo
+  bot_name: #will need the login name of the bot github user
+  repo: #repo that you want to annoy
+  expire_range: #how long you want it to look since last update to pr in days
+  retry_range: #how often you want to be annoying in days
