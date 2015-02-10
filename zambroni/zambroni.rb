@@ -1,11 +1,11 @@
 require 'optparse'
-require 'httmultiparty'
+require 'httparty'
 
 # the  maximum number of available versions corresponding to the same git branch
 GIT_BRANCH_VERSION_MAX_COUNT = 5
 
 class HockeyAppApiClient
-  include HTTMultiParty
+  include HTTParty
 
   HOCKEYAPP_BASE_URI = 'https://rink.hockeyapp.net/api/2'
 
