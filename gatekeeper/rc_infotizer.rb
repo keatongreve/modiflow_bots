@@ -14,28 +14,32 @@ parser = OptionParser.new do |opts|
   opts.banner = "Usage: gatekeeper.rb [options]"
 
   opts.on('-l', '--login login', 'Login (username or email)') do |login|
-    options[:login] = login;
+    options[:login] = login
   end
 
   opts.on('-p', '--password password', 'Password') do |password|
-    options[:password] = password;
+    options[:password] = password
   end
 
   opts.on('--repo repo', 'Repository name') do |repo|
-    options[:repo] = repo;
+    options[:repo] = repo
   end
 
   opts.on('-m', '--master master', 'Master/stable branch') do |master_branch|
-    options[:master_branch] = master_branch;
+    options[:master_branch] = master_branch
   end
 
-  opts.on('--release release', 'Release candidate branch name (created if doesn\'t exist)') do |release_branch|
-    options[:release_branch] = release_branch;
+  opts.on('--release release', 'Release candidate branch name (pull request should already be open)') do |release_branch|
+    options[:release_branch] = release_branch
   end
 end
 
 parser.parse!
 
+if options.values.all?(&:nil?)
+  puts parser.to_s
+  exit
+end
 
 Octokit.auto_paginate = true
 client = Octokit::Client.new(login: options[:login], password: options[:password])
@@ -68,10 +72,16 @@ rc_features = rc_commits_formatted.select { |c|
   match
 }
 
-rc_features.each { |c| puts "#{c[:url]} - #{c[:message]}" }
-puts rc_features.length
+# rc_features.each { |c| puts "#{c[:url]} - #{c[:message]}" }
+# puts rc_features.length
 
 # print for easy markdown easy live
-rc_features.each do |c|
-  puts "[#{c[:message]}](https://github.com/hudl/modi/pull/#{c[:pr_number]})"
-end
+# rc_features.each do |c|
+  # puts "[#{c[:message]}](https://github.com/hudl/modi/pull/#{c[:pr_number]})"
+# end
+
+body_text = rc_features.map { |c| "[#{c[:message]}](https://github.com/hudl/modi/pull/#{c[:pr_number]})" }.join("\n")
+
+puts rc_pull[:number]
+puts body_text
+client.update_pull_request(options[:repo], rc_pull[:number], { body: body_text })
