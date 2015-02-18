@@ -1,11 +1,21 @@
 command :clean do |c|
   c.syntax = 'zambroni clean [options]'
   c.summary = 'Delete old HockeyApp versions'
-  c.description = ''
+  c.description = %(
+      Finds all existing versions in your HockeyApp app, and groups them by
+      the branch they were built from. Your long version string should have the
+      format MAJOR.MINOR.PATCH.REVISION (BRANCH_NAME). If the (BRANCH_NAME) is
+      not  included, then the app versions are grouped by exact version. Then
+      zambroni will sort them by date created, and delete all but the 3 newest
+      versions in that group. If you add GitHub credentials, it will delete all
+      builds for a branch that is no longer on origin.
+    ).gsub(/\s+/, " ").strip
 
   c.option '--app APP_VERSION_ID', String, 'The long App ID'
   c.option '--token API_TOKEN', String, 'Your API auth token'
-
+  c.option '--gh_user GITHUB_USERNAME', String, 'Your username to log into GitHub'
+  c.option '--gh_pass GITHUB_PASSWORD', String, 'Your password to log into GitHub'
+  c.option '--gh_repo GITHUB_REPO', String, 'The repo for the source code for your HockeyApp builds'
   c.action do |args, options|
 
     # the  maximum number of available versions corresponding to
@@ -15,6 +25,11 @@ command :clean do |c|
     token = options.token
     @app_id = options.app
     @client = Zambroni::HockeyApp::HockeyAppApiClient.new(token)
+
+    if options.gh_user && options.gh_pass && options.gh_repo
+      @github_client = Octokit::Client.new(login: options.gh_user, password: options.gh_pass)
+      @repo = options.gh_repo
+    end
 
     apps = @client.get_apps
     app = apps.find { |a| a['public_identifier'] == @app_id }
@@ -44,6 +59,27 @@ command :clean do |c|
 
     grouped = group_app_versions_by_git_branch(versions)
     grouped.each do |group, app_versions|
+
+      group_parts = group.split(" ")
+      if group_parts.length == 2 && @github_client
+        branch = group_parts[1].match(/\((.*)\)/).captures.first
+        branch_exists = true
+        begin
+          @github_client.branch(@repo, branch)
+        rescue Octokit::NotFound
+          branch_exists = false
+        end
+
+        unless branch_exists
+          puts "Deleting all builds for branch #{branch}"
+          app_versions.each do |app_version|
+            version_id = app_version['id']
+            puts "Deleting #{group} - #{version_id}"
+            @client.delete_app_version(@app_id, version_id)
+          end
+        end
+      end
+
       if app_versions.length > GIT_BRANCH_VERSION_MAX_COUNT
         puts "#{group} has more than #{GIT_BRANCH_VERSION_MAX_COUNT} versions. Cleaning up."
         app_versions.take(app_versions.length - GIT_BRANCH_VERSION_MAX_COUNT).each do |app_version|
@@ -52,6 +88,7 @@ command :clean do |c|
           @client.delete_app_version(@app_id, version_id)
         end
       end
+
     end
 
   end
