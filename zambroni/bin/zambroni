@@ -1,0 +1,16 @@
+#!/usr/bin/env ruby
+
+require 'rubygems'
+require 'commander/import'
+
+$:.push File.expand_path("../../lib", __FILE__)
+require 'zambroni'
+
+program :version, Zambroni::VERSION
+program :description, 'Command that deletes old/unneeded HockeyApp versions'
+
+program :help_formatter, :compact
+
+default_command :help
+
+require 'zambroni/commands'
