@@ -15,6 +15,7 @@ command :clean do |c|
   c.option '--token API_TOKEN', String, 'Your API auth token'
   c.option '--gh_user GITHUB_USERNAME', String, 'Your username to log into GitHub'
   c.option '--gh_pass GITHUB_PASSWORD', String, 'Your password to log into GitHub'
+  c.option '--gh_token GITHUB_API_TOKEN', String, 'Your API token for GitHub (overrides username and password)'
   c.option '--gh_repo GITHUB_REPO', String, 'The repo for the source code for your HockeyApp builds'
   c.action do |args, options|
 
@@ -26,15 +27,30 @@ command :clean do |c|
     @app_id = options.app
     @client = Zambroni::HockeyApp::HockeyAppApiClient.new(token)
 
-    if options.gh_user && options.gh_pass && options.gh_repo
-      @github_client = Octokit::Client.new(login: options.gh_user, password: options.gh_pass)
+    if options.gh_user || options.gh_pass || options.gh_token || options.gh_repo
+
+      # Check for sufficient --gh options
+      # 1. User & password & repo
+      # 2. Token & repo
+      # 3. User & password & token & repo (user and password ignored)
+      token = options.gh_token
+      unless token
+        raise "Need both --gh_user and --gh_pass if not using --gh_token" unless options.gh_user && options.gh_pass
+      end
+      raise "Need --gh_repo if using any GitHub authentication" unless options.gh_repo
       @repo = options.gh_repo
+
+      if token
+        @github_client = Octokit::Client.new(access_token: token)
+      else
+        @github_client = Octokit::Client.new(login: options.gh_user, password: options.gh_pass)
+      end
     end
 
     apps = @client.get_apps
     app = apps.find { |a| a['public_identifier'] == @app_id }
 
-    raise "Bro. Could not find app with ID #{@app_id}." unless app
+    raise "Bro. Could not find app with ID #{@app_id}" unless app
 
     versions = @client.get_app_versions(@app_id)
       .select { |v| v['status'] >= 0 }

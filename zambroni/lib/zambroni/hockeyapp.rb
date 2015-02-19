@@ -35,7 +35,7 @@ module Zambroni::HockeyApp
     private
       def test_api_token
         response = self.class.get '/apps'
-        raise "Bro. Bad API token." if response.code == 400
+        raise "Bro. Bad API token" if response.code == 400
       end
 
   end
