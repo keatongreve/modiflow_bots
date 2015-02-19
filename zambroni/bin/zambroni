@@ -3,7 +3,9 @@
 require 'rubygems'
 require 'commander/import'
 
-$:.push File.expand_path("../../lib", __FILE__)
+FILE_PATH = File.symlink?(__FILE__) ? File.readlink(__FILE__) : __FILE__
+$:.push File.expand_path("../../lib", FILE_PATH)
+
 require 'zambroni'
 
 program :version, Zambroni::VERSION
