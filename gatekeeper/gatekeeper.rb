@@ -4,6 +4,7 @@ require 'octokit'
 options = {
   login: nil,
   password: nil,
+  token: nil,
   repo: nil,
   master_branch: nil,
   develop_branch: nil,
@@ -13,25 +14,29 @@ options = {
 }
 
 parser = OptionParser.new do |opts|
-	opts.banner = "Usage: gatekeeper.rb [options]"
+  opts.banner = "Usage: gatekeeper.rb [options]"
 
-	opts.on('-l', '--login login', 'Login (username or email)') do |login|
-		options[:login] = login;
-	end
+  opts.on('-l', '--login login', 'GitHub login (username or email)') do |login|
+    options[:login] = login;
+  end
 
-	opts.on('-p', '--password password', 'Password') do |password|
-		options[:password] = password;
-	end
+  opts.on('-p', '--password password', 'GitHub password') do |password|
+    options[:password] = password;
+  end
 
-	opts.on('--repo repo', 'Repository name') do |repo|
-		options[:repo] = repo;
-	end
+  opts.on('--token token', 'GitHub access token (overrides username and password)') do |token|
+    options[:token] = token;
+  end
 
-  opts.on('-m', '--master master', 'Master/stable branch') do |master_branch|
+  opts.on('--repo repo', 'Repository name') do |repo|
+    options[:repo] = repo;
+  end
+
+  opts.on('-m', '--master master', 'Master/stable branch (default is master)') do |master_branch|
     options[:master_branch] = master_branch;
   end
 
-  opts.on('-d', '--develop develop', 'Develop branch') do |develop_branch|
+  opts.on('-d', '--develop develop', 'Develop branch (default is develop)') do |develop_branch|
     options[:develop_branch] = develop_branch;
   end
 
@@ -59,14 +64,31 @@ if options.values.all?(&:nil?)
   exit
 end
 
-options.each do |k, v|
-  raise OptionParser::MissingArgument, k if v.nil?
+options[:master_branch] = 'master' unless options[:master_branch]
+puts "master branch is '#{options[:master_branch]}'."
+options[:develop_branch] = 'develop' unless options[:develop_branch]
+puts "develop branch is '#{options[:develop_branch]}'."
+options[:body] = '' unless options[:body]
+
+
+abort "Please provide a repository name (--repo)." unless options[:repo]
+abort "Please provide a release/RC branch name (--release)." unless options[:release_branch]
+abort "Please specify a PR title (--title)." unless options[:title]
+
+if options[:token]
+  client = Octokit::Client.new(access_token: options[:token])
+elsif options[:login] && options[:password]
+  client = Octokit::Client.new(login: options[:login], password: options[:password])
+else
+  raise "No GitHub authentication credentials. Please provide a username/login or an access token"
 end
 
-client = Octokit::Client.new(login: options[:login], password: options[:password])
-
 user = client.user
-repo = client.repository(options[:repo])
+begin
+  repo = client.repository(options[:repo])
+rescue Octokit::NotFound
+  abort "Repo '#{options[:repo]} could not be found."
+end
 
 begin
   master_branch = client.branch(options[:repo], options[:master_branch])
