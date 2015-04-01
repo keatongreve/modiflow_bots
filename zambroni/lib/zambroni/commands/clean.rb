@@ -1,3 +1,5 @@
+require 'byebug'
+
 command :clean do |c|
   c.syntax = 'zambroni clean [options]'
   c.summary = 'Delete old HockeyApp versions'
@@ -35,9 +37,9 @@ command :clean do |c|
       # 3. User & password & token & repo (user and password ignored)
       token = options.gh_token
       unless token
-        raise "Need both --gh_user and --gh_pass if not using --gh_token" unless options.gh_user && options.gh_pass
+        abort "Need both --gh_user and --gh_pass if not using --gh_token" unless options.gh_user && options.gh_pass
       end
-      raise "Need --gh_repo if using any GitHub authentication" unless options.gh_repo
+      abort "Need --gh_repo if using any GitHub authentication" unless options.gh_repo
       @repo = options.gh_repo
 
       if token
@@ -50,7 +52,7 @@ command :clean do |c|
     apps = @client.get_apps
     app = apps.find { |a| a['public_identifier'] == @app_id }
 
-    raise "Bro. Could not find app with ID #{@app_id}" unless app
+    abort "Bro. Could not find app with ID #{@app_id}" unless app
 
     versions = @client.get_app_versions(@app_id)
       .select { |v| v['status'] >= 0 }
@@ -59,26 +61,62 @@ command :clean do |c|
     def group_app_versions_by_git_branch(app_versions)
       app_versions_grouped = {}
       app_versions.each do |version|
-        version_string = version['version']
-        match = version_string.match(/(\d*\.\d*\.\d*)\.?\w*\s?(\([\w\.\-]*\))?/i)
-        appstore_version, git_branch = match.captures
-        version_group_string = "#{appstore_version} #{git_branch}"
-        version_group_string = appstore_version if git_branch.nil?
-        if app_versions_grouped[version_group_string]
-          app_versions_grouped[version_group_string] << version
-        else
-          app_versions_grouped[version_group_string] = [version]
+        short_version = version['shortversion']
+        if short_version.nil? || short_version.empty?
+          short_version == "NO_SHORT_VERSION"
         end
+
+        long_version = version['version']
+
+        # only the important properties
+        version_lite = {
+          id: version['id'],
+          short_version: short_version,
+          long_version: long_version,
+          git_branch: nil
+        }
+
+        match = long_version.match(/.*\((.*)\)/i)
+        if match
+          git_branch = match.captures.first
+          if git_branch.nil? || git_branch.empty?
+            # use a string that is an invalid git branch name to prevent collision
+            git_branch = ".."
+          end
+        else
+          git_branch = ".."
+        end
+        version_lite[:git_branch] = git_branch
+
+        app_versions_grouped[git_branch] = [] unless app_versions_grouped[git_branch]
+        app_versions_grouped[git_branch] << version_lite
       end
       app_versions_grouped
     end
 
-    grouped = group_app_versions_by_git_branch(versions)
-    grouped.each do |group, app_versions|
+    grouped = group_app_versions_by_git_branch(versions).sort
 
-      group_parts = group.split(" ")
-      if group_parts.length == 2 && @github_client
-        branch = group_parts[1].match(/\((.*)\)/).captures.first
+    grouped.each do |branch, versions|
+      puts "[#{branch}]"
+      versions.sort_by! { |v| v['timestamp'] }.each do |version|
+        puts "    #{version[:long_version]}"
+      end
+    end
+
+    version_ids_to_delete = []
+
+    grouped.each do |branch, app_versions|
+
+      if branch == ".."
+        puts "deleting builds with no branch"
+        app_versions.each do |app_version|
+          version_ids_to_delete << app_version[:id]
+          puts "\tDeleting #{app_version[:long_version]} - id=#{app_version[:id]}"
+        end
+        next
+      end
+
+      if @github_client
         branch_exists = true
         begin
           @github_client.branch(@repo, branch)
@@ -89,22 +127,24 @@ command :clean do |c|
         unless branch_exists
           puts "Deleting all builds for branch #{branch}"
           app_versions.each do |app_version|
-            version_id = app_version['id']
-            puts "Deleting #{group} - #{version_id}"
-            @client.delete_app_version(@app_id, version_id)
+            version_ids_to_delete << app_version[:id]
+            puts "\tDeleting #{app_version[:long_version]} - id=#{app_version[:id]}"
           end
         end
       end
 
       if app_versions.length > GIT_BRANCH_VERSION_MAX_COUNT
-        puts "#{group} has more than #{GIT_BRANCH_VERSION_MAX_COUNT} versions. Cleaning up."
+        puts "#{branch} has more than #{GIT_BRANCH_VERSION_MAX_COUNT} versions. Cleaning up."
         app_versions.take(app_versions.length - GIT_BRANCH_VERSION_MAX_COUNT).each do |app_version|
-          version_id = app_version['id']
-          puts "Deleting #{group} - #{version_id}"
-          @client.delete_app_version(@app_id, version_id)
+          version_ids_to_delete << app_version[:id]
+          puts "\tDeleting #{app_version[:long_version]} - id=#{app_version[:id]}"
         end
       end
 
+    end
+
+    version_ids_to_delete.each do |version_id|
+      #@client.delete_app_version(@app_id, version_id)
     end
 
   end
