@@ -70,7 +70,6 @@ options[:develop_branch] = 'develop' unless options[:develop_branch]
 puts "develop branch is '#{options[:develop_branch]}'."
 options[:body] = '' unless options[:body]
 
-
 abort "Please provide a repository name (--repo)." unless options[:repo]
 abort "Please provide a release/RC branch name (--release)." unless options[:release_branch]
 abort "Please specify a PR title (--title)." unless options[:title]
@@ -80,7 +79,7 @@ if options[:token]
 elsif options[:login] && options[:password]
   client = Octokit::Client.new(login: options[:login], password: options[:password])
 else
-  raise "No GitHub authentication credentials. Please provide a username/login or an access token"
+  abort "No GitHub authentication credentials. Please provide a username/login or an access token"
 end
 
 user = client.user

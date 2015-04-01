@@ -5,6 +5,7 @@ require 'httparty'
 options = {
   login: nil,
   password: nil,
+  token: nil,
   repo: nil,
   master_branch: nil,
   release_branch: nil,
@@ -13,19 +14,23 @@ options = {
 parser = OptionParser.new do |opts|
   opts.banner = "Usage: gatekeeper.rb [options]"
 
-  opts.on('-l', '--login login', 'Login (username or email)') do |login|
+  opts.on('-l', '--login login', 'GitHub login (username or email)') do |login|
     options[:login] = login
   end
 
-  opts.on('-p', '--password password', 'Password') do |password|
+  opts.on('-p', '--password password', 'GitHub password') do |password|
     options[:password] = password
+  end
+
+  opts.on('-t', '--token token', 'GitHub access token (overrides username and password)') do |token|
+    options[:token] = token
   end
 
   opts.on('--repo repo', 'Repository name') do |repo|
     options[:repo] = repo
   end
 
-  opts.on('-m', '--master master', 'Master/stable branch') do |master_branch|
+  opts.on('-m', '--master master', 'Master/stable branch (default is master)') do |master_branch|
     options[:master_branch] = master_branch
   end
 
@@ -41,16 +46,33 @@ if options.values.all?(&:nil?)
   exit
 end
 
+options[:master_branch] = 'master' unless options[:master_branch]
+
+abort "Please provide a repository name (--repo)." unless options[:repo]
+abort "Please provide a release/RC branch name (--release)." unless options[:release_branch]
+
 Octokit.auto_paginate = true
-client = Octokit::Client.new(login: options[:login], password: options[:password])
+
+if options[:token]
+  client = Octokit::Client.new(access_token: options[:token])
+elsif options[:login] && options[:password]
+  client = Octokit::Client.new(login: options[:login], password: options[:password])
+else
+  abort "No GitHub authentication credentials. Please provide a username/login or an access token"
+end
 
 user = client.user
-repo = client.repository(options[:repo])
+
+begin
+  repo = client.repository(options[:repo])
+rescue Octokit::NotFound
+  abort "Repo '#{options[:repo]} could not be found."
+end
 
 begin
   release_branch = client.branch(options[:repo], options[:release_branch])
 rescue Octokit::NotFound
-  raise ArgumentError.new, "branch '#{options[:release_branch]}' does not exist"
+  abort "branch '#{options[:release_branch]}' does not exist"
 end
 
 open_pulls = client.pull_requests(options[:repo], { state: 'open', base: options[:master_branch] })
@@ -72,15 +94,7 @@ rc_features = rc_commits_formatted.select { |c|
   match
 }
 
-# rc_features.each { |c| puts "#{c[:url]} - #{c[:message]}" }
-# puts rc_features.length
-
-# print for easy markdown easy live
-# rc_features.each do |c|
-  # puts "[#{c[:message]}](https://github.com/hudl/modi/pull/#{c[:pr_number]})"
-# end
-
-body_text = rc_features.map { |c| "[#{c[:message]}](https://github.com/hudl/modi/pull/#{c[:pr_number]})" }.join("\n")
+body_text = rc_features.map { |c| "[#{c[:message]}](https://github.com/#{options[:repo]}/pull/#{c[:pr_number]})" }.join("\n")
 
 puts rc_pull[:number]
 puts body_text
