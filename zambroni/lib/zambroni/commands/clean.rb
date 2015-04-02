@@ -94,22 +94,22 @@ command :clean do |c|
 
     grouped = group_app_versions_by_git_branch(versions).sort
 
-    grouped.each do |branch, versions|
-      puts "[#{branch}]"
-      versions.sort_by! { |v| v['timestamp'] }.each do |version|
-        puts "    #{version[:long_version]}"
-      end
-    end
+    # grouped.each do |branch, versions|
+    #   puts "[#{branch}]"
+    #   versions.sort_by! { |v| v['timestamp'] }.each do |version|
+    #     puts "    #{version[:long_version]}"
+    #   end
+    # end
 
     version_ids_to_delete = []
 
     grouped.each do |branch, app_versions|
 
       if branch == ".."
-        puts "deleting builds with no branch"
+        puts "Deleting builds with no branch"
         app_versions.each do |app_version|
           version_ids_to_delete << app_version[:id]
-          puts "\tDeleting #{app_version[:long_version]} - id=#{app_version[:id]}"
+          puts "\Queue for deletion: #{app_version[:long_version]} - id=#{app_version[:id]}"
         end
         next
       end
@@ -126,7 +126,7 @@ command :clean do |c|
           puts "Deleting all builds for branch #{branch}"
           app_versions.each do |app_version|
             version_ids_to_delete << app_version[:id]
-            puts "\tDeleting #{app_version[:long_version]} - id=#{app_version[:id]}"
+            puts "  Queue for deletion: #{app_version[:long_version]} - id=#{app_version[:id]}"
           end
         end
       end
@@ -135,14 +135,15 @@ command :clean do |c|
         puts "#{branch} has more than #{GIT_BRANCH_VERSION_MAX_COUNT} versions. Cleaning up."
         app_versions.take(app_versions.length - GIT_BRANCH_VERSION_MAX_COUNT).each do |app_version|
           version_ids_to_delete << app_version[:id]
-          puts "\tDeleting #{app_version[:long_version]} - id=#{app_version[:id]}"
+          puts "  Queue for deletion: #{app_version[:long_version]} - id=#{app_version[:id]}"
         end
       end
 
     end
 
     version_ids_to_delete.each do |version_id|
-      #@client.delete_app_version(@app_id, version_id)
+      puts "Deleting #{version_id}"
+      @client.delete_app_version(@app_id, version_id)
     end
 
   end
