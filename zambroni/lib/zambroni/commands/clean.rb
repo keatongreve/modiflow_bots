@@ -1,5 +1,3 @@
-require 'byebug'
-
 command :clean do |c|
   c.syntax = 'zambroni clean [options]'
   c.summary = 'Delete old HockeyApp versions'
