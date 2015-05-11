@@ -63,7 +63,10 @@ corrections.each do |correction|
 		puts "\tIn file #{path}"
 		File.write(
 			path,
-			File.open(path, &:read).gsub(original, corrected)
+			File.open(path, &:read)
+				.gsub(" #{original}", " #{corrected}")
+				.gsub(":#{original}", ":#{corrected}")
+				.gsub("\"#{original}\"", "\"#{corrected}\"")
 		)
 	end
 end
