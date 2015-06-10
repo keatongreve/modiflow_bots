@@ -109,7 +109,7 @@ command :clean do |c|
         puts "Deleting builds with no branch"
         app_versions.each do |app_version|
           version_ids_to_delete << app_version[:id]
-          puts "\Queue for deletion: #{app_version[:long_version]} - id=#{app_version[:id]}"
+          puts "  Queue for deletion: #{app_version[:long_version]} - id=#{app_version[:id]}"
         end
         next
       end
@@ -121,6 +121,9 @@ command :clean do |c|
         rescue Octokit::NotFound
           branch_exists = false
         end
+
+        # Don't ever delete RCs automatically in case we need to find critical issues
+        next if branch.downcase.start_with? "rc"
 
         unless branch_exists
           puts "Deleting all builds for branch #{branch}"
