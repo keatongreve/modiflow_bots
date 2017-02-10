@@ -5,10 +5,10 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 GATEKEEPER_PATH="${SCRIPT_DIR}/.."
 
 # Generate at https://github.com/settings/tokens
-GH_TOKEN='a'
+GH_TOKEN=''
 
 # org/repo
-REPO='a'
+REPO=''
 
 if [ "$#" -ne 1 ] ;
         then
