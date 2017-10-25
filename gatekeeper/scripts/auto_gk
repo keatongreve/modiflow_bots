@@ -4,19 +4,17 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 GATEKEEPER_PATH="${SCRIPT_DIR}/.."
 
-# Generate at https://github.com/settings/tokens
-GH_TOKEN=''
-
-# org/repo
-REPO=''
-
-if [ "$#" -ne 1 ] ;
+if [ "$#" -ne 3 ] ;
         then
-        echo "Usage: auto_gk [current_version]"
+        echo "Usage: auto_gk [token] [repo] [current_version]"
         exit 1
 fi
 
-VERSION=$1
+# Generate at https://github.com/settings/tokens
+GH_TOKEN=$1
+# org/repo
+REPO=$2
+VERSION=$3
 
 if [ -z "${GH_TOKEN}" ]; then
         echo "GH_TOKEN variable is not set."
